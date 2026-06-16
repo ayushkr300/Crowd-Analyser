@@ -1,0 +1,161 @@
+# Python
+
+**pycache**/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual Environments
+
+.venv/
+venv/
+env/
+ENV/
+
+# IDEs
+
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# macOS
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+
+Thumbs.db
+Desktop.ini
+
+# Streamlit
+
+.streamlit/secrets.toml
+
+# Logs
+
+logs/
+*.log
+
+# Runtime Files
+
+*.pid
+*.out
+*.err
+
+# Uploaded Files
+
+uploads/*
+!uploads/.gitkeep
+
+# Generated Outputs
+
+outputs/*
+!outputs/.gitkeep
+
+# Temporary Files
+
+tmp/
+temp/
+*.tmp
+
+# Python Build Artifacts
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Jupyter
+
+.ipynb_checkpoints/
+
+# PyTest
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+# MyPy
+
+.mypy_cache/
+
+# PyCharm
+
+.idea/
+
+# Model Checkpoints
+
+checkpoints/
+saved_models/
+trained_models/
+
+# Torch
+
+*.pth
+*.pt
+*.ckpt
+
+# TensorBoard
+
+runs/
+events.out.tfevents.*
+
+# Dataset Cache
+
+.cache/
+data/cache/
+
+# OpenCV Generated Files
+
+*.avi
+*.mp4
+*.mov
+*.mkv
+
+# Generated Images
+
+*.png
+*.jpg
+*.jpeg
+!assets/*.png
+!assets/*.jpg
+!assets/*.jpeg
+
+# Environment Variables
+
+.env
+.env.*
+!.env.example
+
+# SSH Keys
+
+ssh_key
+ssh_key.pub
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+
+# Benchmarks / Reports
+
+reports/
+analysis_reports/
+
+# Streamlit Cloud
+
+.streamlit/config.toml.local
+
+# OS Generated
+
+.Trashes
+.fseventsd
+
+# Keep model weights folder structure but ignore large models
+
+weights/*
+!weights/.gitkeep
+!weights/README.md
+!weights/*.md
