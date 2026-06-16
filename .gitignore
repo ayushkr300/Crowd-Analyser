@@ -36,7 +36,6 @@ Desktop.ini
 
 # Logs
 
-logs/
 *.log
 
 # Runtime Files
