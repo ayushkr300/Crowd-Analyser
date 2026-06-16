@@ -7,6 +7,6 @@ numpy
 scipy
 matplotlib
 Pillow
-opencv-python
+opencv-python-headless
 streamlit
 plotly
