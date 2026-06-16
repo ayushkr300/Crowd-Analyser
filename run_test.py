@@ -42,8 +42,7 @@ def main(args, debug=False):
 
     os.environ["CUDA_VISIBLE_DEVICES"] = '{}'.format(args.gpu_id)
 
-    print(args)
-    device = torch.device('cuda')
+    device = torch.device('cpu')
     # get the P2PNet
     model = build_model(args)
     # move to GPU
@@ -61,14 +60,17 @@ def main(args, debug=False):
     ])
 
     # set your image path here
-    img_path = "./vis/demo1.jpg"
+    img_path = "./vis/images.jpeg"
     # load the images
     img_raw = Image.open(img_path).convert('RGB')
     # round the size
     width, height = img_raw.size
     new_width = width // 128 * 128
     new_height = height // 128 * 128
-    img_raw = img_raw.resize((new_width, new_height), Image.ANTIALIAS)
+    img_raw = img_raw.resize(
+        (new_width, new_height),
+        Image.Resampling.LANCZOS
+    )
     # pre-proccessing
     img = transform(img_raw)
 
@@ -85,6 +87,31 @@ def main(args, debug=False):
     points = outputs_points[outputs_scores > threshold].detach().cpu().numpy().tolist()
     predict_cnt = int((outputs_scores > threshold).sum())
 
+    # --------------------------------------------------
+    # Density Calculation
+    # --------------------------------------------------
+
+    # Example: visible area covered by camera
+    visible_area_m2 = 300.0
+
+    density = predict_cnt / visible_area_m2
+
+    # Risk Classification
+    if density < 2:
+        risk = "LOW"
+    elif density < 4:
+        risk = "MODERATE"
+    elif density < 6:
+        risk = "HIGH"
+    else:
+        risk = "CRITICAL"
+
+    print("=" * 50)
+    print(f"Estimated Crowd Count : {predict_cnt}")
+    print(f"Visible Area          : {visible_area_m2:.2f} m²")
+    print(f"Crowd Density         : {density:.2f} persons/m²")
+    print(f"Risk Level            : {risk}")
+    print("=" * 50)
     outputs_scores = torch.nn.functional.softmax(outputs['pred_logits'], -1)[:, :, 1][0]
 
     outputs_points = outputs['pred_points'][0]
