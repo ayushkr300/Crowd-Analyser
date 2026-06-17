@@ -5,8 +5,11 @@ import os
 import tempfile
 import cv2
 import numpy as np
+import time
+import threading
 
 from crowd_analyzer import get_analyzer
+from stream_monitor import StreamMonitor, AlertConfig
 
 # ── Directory Setup ─────────────────────────────────────────────────────────[...]
 UPLOAD_DIR = "uploads"
@@ -17,7 +20,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 # ── Page config ──────────────────────────────────────────────────────────[...]
 st.set_page_config(
     page_title="Crowd Density Monitor",
-    page_icon="",
+    page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -241,6 +244,22 @@ html, body, [data-testid="stAppViewContainer"] {
 .rpill.HIGH     { background: #FFF7ED; color: #9A3412; }
 .rpill.CRITICAL { background: #FEF2F2; color: #991B1B; }
 
+/* ---- Status indicator ---- */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: .75rem;
+    font-weight: 600;
+}
+.status-badge.live { background: #EF4444; color: white; }
+.status-badge.paused { background: #F59E0B; color: white; }
+.status-badge.offline { background: #6B7280; color: white; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s infinite; }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
 /* ---- Success toast ---- */
 .toast {
     background: #ECFDF5;
@@ -312,7 +331,7 @@ RISK_META = {
 }
 KPI_RISK_CLASS = {"LOW": "c-success", "MODERATE": "c-warning", "HIGH": "c-warning", "CRITICAL": "c-danger"}
 
-# ── HTML helpers ──────────────────────────────────────────────────────────[...]
+# ── HTML helpers ───────────────────────────────────────────────────────────[...]
 def kpi_html(meta_label, value, sub, cls):
     return f"""
     <div class="kpi-card {cls}">
@@ -359,7 +378,7 @@ def summary_html(results, fname, area):
     )
     return f'<div class="summary-card"><div class="sec-label" style="margin-bottom:.7rem">Analysis Summary</div><div class="summary-grid">{cells}</div></div>'
 
-# ── Model ────────────────────────────────────────────────────────────[...]
+# ── Model ──────────────────────────────────────────────────────────────[...]
 @st.cache_resource(show_spinner=False)
 def load_analyzer():
     return get_analyzer()
@@ -371,10 +390,14 @@ if "uploaded_img" not in st.session_state:
     st.session_state.uploaded_img = None
 if "vid_analysis_results" not in st.session_state:
     st.session_state.vid_analysis_results = None
+if "stream_monitor" not in st.session_state:
+    st.session_state.stream_monitor = None
+if "stream_stats_history" not in st.session_state:
+    st.session_state.stream_stats_history = []
 
 # ── Sidebar ────────────────────────────────────────────────────────────[...]
 with st.sidebar:
-    st.markdown('<div class="sb-title">Crowd Monitor</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sb-title">⚙️ Settings</div>', unsafe_allow_html=True)
 
     st.markdown('<div class="sb-label">Visible Area</div>', unsafe_allow_html=True)
     area = st.number_input(
@@ -396,17 +419,25 @@ with st.sidebar:
 
     with st.expander("How to use"):
         st.markdown("""
-        1. Select Image or Video mode.
-        2. Upload a file.
-        3. Set the visible area above.
-        4. Click **Analyse Crowd**.
-        5. Download results.
+        **Image Mode:**
+        1. Upload an image
+        2. Click **Analyse Image**
+        
+        **Video Mode:**
+        1. Upload video
+        2. Set sampling rate
+        3. Click **Analyse Video**
+        
+        **Stream Mode:**
+        1. Enter stream URL (RTSP/HTTP)
+        2. Configure alerts
+        3. Click **Start Monitoring**
         """)
 
 # ── Page header ────────────────────────────────────────────────────────────[...]
 st.markdown("""
 <div class="app-header">
-    <span class="app-title">Crowd Density Monitoring System</span>
+    <span class="app-title">📊 Crowd Density Monitoring System</span>
 </div>
 """, unsafe_allow_html=True)
 
@@ -417,13 +448,13 @@ with st.spinner("Loading model…"):
 # ── MODE TOGGLE ────────────────────────────────────────────────────────────[...]
 app_mode = st.radio(
     "Select Analysis Mode",
-    ["🖼️ Image Analysis", "🎥 Video Analysis"],
+    ["🖼️ Image Analysis", "🎥 Video Analysis", "📡 Live Stream Monitor"],
     horizontal=True,
     label_visibility="collapsed"
 )
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── IMAGE ANALYSIS ──────────────────────────────────────────────────────────[...]
+# ── IMAGE ANALYSIS ─────────────────────────────────────────────────────────[...]
 if app_mode == "🖼️ Image Analysis":
     left_col, right_col = st.columns([3, 7], gap="medium")
 
@@ -465,7 +496,6 @@ if app_mode == "🖼️ Image Analysis":
 
     if analyse_img_clicked and st.session_state.uploaded_img:
         with st.spinner("Running crowd detection…"):
-            # Save the uploaded file permanently
             upload_path = os.path.join(UPLOAD_DIR, st.session_state.uploaded_img.name)
             with open(upload_path, "wb") as f:
                 f.write(st.session_state.uploaded_img.getvalue())
@@ -483,7 +513,6 @@ if app_mode == "🖼️ Image Analysis":
         rc      = KPI_RISK_CLASS[risk]
         fname   = st.session_state.uploaded_img.name if st.session_state.uploaded_img else "Unknown"
 
-        # Save the annotated image and CSV to outputs automatically
         output_img_path = os.path.join(OUTPUT_DIR, f"annotated_{fname}")
         cv2.imwrite(output_img_path, results["annotated_image"])
 
@@ -567,7 +596,7 @@ if app_mode == "🖼️ Image Analysis":
                 use_container_width=True,
             )
 
-# ── VIDEO ANALYSIS ──────────────────────────────────────────────────────────[...]
+# ── VIDEO ANALYSIS ─────────────────────────────────────────────────────────[...]
 elif app_mode == "🎥 Video Analysis":
     col1, col2 = st.columns([1, 2], gap="medium")
     
@@ -598,7 +627,6 @@ elif app_mode == "🎥 Video Analysis":
 
     if analyse_vid_clicked and uploaded_video:
         with st.spinner("Initialising video processing..."):
-            # Save the video upload permanently
             vid_upload_path = os.path.join(UPLOAD_DIR, uploaded_video.name)
             with open(vid_upload_path, "wb") as f:
                 f.write(uploaded_video.getvalue())
@@ -607,7 +635,7 @@ elif app_mode == "🎥 Video Analysis":
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         
-        if fps <= 0: fps = 30 # Fallback 
+        if fps <= 0: fps = 30
         frame_skip = max(1, int(fps * sample_rate_sec))
         frames_to_process = (total_frames + frame_skip - 1) // frame_skip
         
@@ -627,14 +655,12 @@ elif app_mode == "🎥 Video Analysis":
                 ret, frame = cap.read()
                 if not ret: break
                 
-                # Process frames that match our sample rate
                 if frame_idx % frame_skip == 0:
                     time_sec = frame_idx / fps
                     current_processed_step = (frame_idx // frame_skip) + 1
                     
                     status_text.markdown(f"**Analyzing frame {current_processed_step} of {frames_to_process}** (Video time: {time_sec:.1f}s)")
                     
-                    # Individual frames are kept temporary to avoid cluttering the disk with hundreds of images
                     fd_img, tmp_img_path = tempfile.mkstemp(suffix=".jpg")
                     os.close(fd_img)
                     
@@ -649,12 +675,9 @@ elif app_mode == "🎥 Video Analysis":
                             "Risk Level": res["risk"]
                         })
                         
-                        # Convert annotated image to numpy array if it's a tensor, then to RGB for display
                         annotated_image = res["annotated_image"]
                         if hasattr(annotated_image, 'cpu'):
-                            # It's a PyTorch tensor
                             annotated_image = annotated_image.cpu().numpy()
-                        # Now convert to contiguous array and RGB (handles both tensor and numpy array cases)
                         annotated_image = np.ascontiguousarray(annotated_image)
                         annotated_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
                         frame_placeholder.image(annotated_rgb, channels="RGB", caption=f"Time: {time_sec:.1f}s | People Count: {res['count']}")
@@ -663,7 +686,7 @@ elif app_mode == "🎥 Video Analysis":
                         os.unlink(tmp_img_path)
                 
                 frame_idx += 1
-                if frame_idx % 5 == 0: # Batch progress bar updates 
+                if frame_idx % 5 == 0:
                     progress_bar.progress(min(frame_idx / total_frames, 1.0))
                     
         except Exception as e:
@@ -676,8 +699,6 @@ elif app_mode == "🎥 Video Analysis":
         
         if results_data:
             st.session_state.vid_analysis_results = pd.DataFrame(results_data)
-            
-            # Save the video CSV report permanently
             vid_csv_path = os.path.join(OUTPUT_DIR, f"video_crowd_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv")
             st.session_state.vid_analysis_results.to_csv(vid_csv_path, index=False)
 
@@ -718,3 +739,152 @@ elif app_mode == "🎥 Video Analysis":
             mime="text/csv",
             use_container_width=True,
         )
+
+# ── LIVE STREAM MONITORING ─────────────────────────────────────────────────[...]
+elif app_mode == "📡 Live Stream Monitor":
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Stream Configuration</div>', unsafe_allow_html=True)
+    
+    col1, col2 = st.columns([2, 1], gap="medium")
+    
+    with col1:
+        stream_url = st.text_input(
+            "Stream URL",
+            placeholder="rtsp://example.com/stream or http://example.com/stream.m3u8",
+            help="Enter RTSP CCTV URL or HTTP/HTTPS stream URL"
+        )
+    
+    with col2:
+        sample_rate = st.number_input(
+            "Sample Rate (sec)",
+            min_value=0.5, max_value=10.0, value=2.0, step=0.5,
+            help="Process 1 frame every N seconds"
+        )
+    
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+    st.markdown('<div class="sec-label">Alert Configuration</div>', unsafe_allow_html=True)
+    
+    acol1, acol2, acol3 = st.columns(3, gap="medium")
+    
+    with acol1:
+        alert_threshold = st.selectbox(
+            "Alert Threshold",
+            ["LOW", "MODERATE", "HIGH", "CRITICAL"],
+            index=2,
+            help="Alert when density reaches this level"
+        )
+    
+    with acol2:
+        alert_cooldown = st.number_input(
+            "Alert Cooldown (sec)",
+            min_value=10, max_value=300, value=60, step=10,
+            help="Minimum seconds between consecutive alerts"
+        )
+    
+    with acol3:
+        enable_alerts = st.checkbox("Enable Alerts", value=True)
+    
+    sound_alert = st.checkbox("Sound Alert", value=True, help="Play beep when alert triggered")
+    log_alerts = st.checkbox("Log Alerts", value=True, help="Save alerts to file")
+    
+    st.markdown('<hr class="div">', unsafe_allow_html=True)
+    
+    col_start, col_stop = st.columns(2, gap="medium")
+    
+    with col_start:
+        start_monitoring = st.button("🔴 Start Monitoring", use_container_width=True, type="primary")
+    
+    with col_stop:
+        stop_monitoring = st.button("⏹️ Stop Monitoring", use_container_width=True)
+    
+    # ── Handle Stream Control ──────────────────────────────────────────────
+    if start_monitoring and stream_url:
+        with st.spinner("Connecting to stream..."):
+            alert_cfg = AlertConfig(
+                enable_alerts=enable_alerts,
+                alert_on_risk=alert_threshold,
+                alert_cooldown_sec=alert_cooldown,
+                sound_alert=sound_alert,
+                log_alerts=log_alerts,
+            )
+            
+            monitor = StreamMonitor(
+                stream_url=stream_url,
+                area=area,
+                sample_rate=sample_rate,
+                alert_config=alert_cfg,
+            )
+            
+            if monitor.start_monitoring():
+                st.session_state.stream_monitor = monitor
+                st.success("✅ Connected! Monitoring started.")
+            else:
+                st.error("❌ Failed to connect to stream. Check URL and try again.")
+    
+    if stop_monitoring and st.session_state.stream_monitor:
+        st.session_state.stream_monitor.stop_monitoring()
+        st.session_state.stream_monitor = None
+        st.info("Monitoring stopped.")
+    
+    # ── Display Stream Stats ───────────────────────────────────────────────
+    if st.session_state.stream_monitor:
+        st.markdown('<hr class="div">', unsafe_allow_html=True)
+        st.markdown('<div class="sec-label">Live Statistics</div>', unsafe_allow_html=True)
+        
+        # Refresh stats every 2 seconds
+        stats_placeholder = st.empty()
+        chart_placeholder = st.empty()
+        alerts_placeholder = st.empty()
+        
+        while st.session_state.stream_monitor and st.session_state.stream_monitor.is_running:
+            stats = st.session_state.stream_monitor.get_stats()
+            
+            # Store history
+            if len(st.session_state.stream_stats_history) == 0 or \
+               (time.time() - st.session_state.stream_stats_history[-1].get('timestamp', 0)) > 1:
+                st.session_state.stream_stats_history.append({
+                    'timestamp': time.time(),
+                    'count': stats.current_crowd_count,
+                    'density': stats.current_density,
+                    'risk': stats.current_risk,
+                })
+            
+            # Cap history at 100 records
+            if len(st.session_state.stream_stats_history) > 100:
+                st.session_state.stream_stats_history = st.session_state.stream_stats_history[-100:]
+            
+            # Update display
+            with stats_placeholder.container():
+                status_color = "live" if stats.current_risk in ["HIGH", "CRITICAL"] else "paused"
+                st.markdown(f"""
+                <div class="status-badge {status_color}">
+                    <span class="status-dot"></span>
+                    {stats.current_risk}
+                </div>
+                """, unsafe_allow_html=True)
+                
+                kpi_cols = st.columns(4)
+                with kpi_cols[0]:
+                    st.metric("Current Count", int(stats.current_crowd_count), "people")
+                with kpi_cols[1]:
+                    st.metric("Density", f"{stats.current_density:.2f}", "p/m²")
+                with kpi_cols[2]:
+                    st.metric("Peak Count", int(stats.peak_count), "people")
+                with kpi_cols[3]:
+                    st.metric("Frames", int(stats.frames_processed), "processed")
+            
+            # Chart
+            if st.session_state.stream_stats_history:
+                with chart_placeholder.container():
+                    chart_df = pd.DataFrame(st.session_state.stream_stats_history)
+                    st.line_chart(chart_df.set_index('timestamp')[['count', 'density']])
+            
+            # Alerts log
+            with alerts_placeholder.container():
+                if Path(monitor.alert_log_path).exists():
+                    with open(monitor.alert_log_path, 'r') as f:
+                        alerts_content = f.read()
+                    st.text_area("Alerts Log", alerts_content, height=150, disabled=True)
+            
+            time.sleep(2)
+            st.rerun()
