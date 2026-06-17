@@ -268,7 +268,7 @@ class CrowdAnalyzer:
 
     @staticmethod
     def _generate_annotated_image(
-        img_raw: Image.Image,
+        img_raw,
         points: List[List[float]],
         point_radius: int = 3,
         point_color: Tuple[int, int, int] = (0, 0, 255),  # BGR red
@@ -276,10 +276,27 @@ class CrowdAnalyzer:
         """
         Draw a filled circle at each detected head location.
 
+        Accepts either a PIL.Image or a numpy ndarray (RGB).
         Returns a BGR ndarray ready for cv2 or Streamlit display.
         """
-        # Ensure the image is converted to CPU numpy array before OpenCV operations
-        img_array = np.array(img_raw)
+        import torch  # local import so the guard doesn't add a module-level dep
+
+        # --- Normalise input to a uint8 RGB numpy array --------------------
+        if torch.is_tensor(img_raw):
+            # Tensor on any device: move to CPU and convert
+            img_array = img_raw.detach().cpu().numpy()
+            # If shape is (C, H, W) transpose to (H, W, C)
+            if img_array.ndim == 3 and img_array.shape[0] in (1, 3, 4):
+                img_array = img_array.transpose(1, 2, 0)
+            img_array = (img_array * 255).clip(0, 255).astype(np.uint8)
+        elif isinstance(img_raw, Image.Image):
+            img_array = np.array(img_raw.convert("RGB"))
+        else:
+            # Already a numpy array — ensure it is uint8
+            img_array = np.asarray(img_raw)
+            if img_array.dtype != np.uint8:
+                img_array = img_array.astype(np.uint8)
+
         canvas = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
         for p in points:
             x, y = int(p[0]), int(p[1])
