@@ -11,7 +11,7 @@ import time
 import warnings
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-
+import torch
 import cv2
 import numpy as np
 import torch
@@ -280,9 +280,10 @@ class CrowdAnalyzer:
         """
         # Ensure the image is converted to CPU numpy array before OpenCV operations
         img_array = np.array(img_raw)
-        # Ensure it's a contiguous array on CPU
-        if hasattr(img_array, 'device'):
-            img_array = img_array.cpu().numpy()
+        
+        # Only convert if it's actually a PyTorch tensor
+        if torch.is_tensor(img_array):
+            img_array = img_array.detach().cpu().numpy()
         canvas = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
         for p in points:
             x, y = int(p[0]), int(p[1])
