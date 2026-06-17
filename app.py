@@ -8,13 +8,13 @@ import numpy as np
 
 from crowd_analyzer import get_analyzer
 
-# ── Directory Setup ────────────────────────────────────────────────────────────
+# ── Directory Setup ─────────────────────────────────────────────────────────[...]
 UPLOAD_DIR = "uploads"
 OUTPUT_DIR = "outputs"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Page config ────────────────────────────────────────────────────────────────
+# ── Page config ──────────────────────────────────────────────────────────[...]
 st.set_page_config(
     page_title="Crowd Density Monitor",
     page_icon="",
@@ -22,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ── Global CSS ─────────────────────────────────────────────────────────────────
+# ── Global CSS ──────────────────────────────────────────────────────────[...]
 st.markdown("""
 <style>
 /* ---- Tokens ---- */
@@ -303,7 +303,7 @@ div[data-testid="stRadio"] > div {
 </style>
 """, unsafe_allow_html=True)
 
-# ── Constants ──────────────────────────────────────────────────────────────────
+# ── Constants ──────────────────────────────────────────────────────────[...]
 RISK_META = {
     "LOW":      {"cls": "success", "dot": "#10B981", "msg": "Crowd density is within safe limits."},
     "MODERATE": {"cls": "info",    "dot": "#3B82F6", "msg": "Crowd density is MODERATE. Monitor the situation."},
@@ -312,7 +312,7 @@ RISK_META = {
 }
 KPI_RISK_CLASS = {"LOW": "c-success", "MODERATE": "c-warning", "HIGH": "c-warning", "CRITICAL": "c-danger"}
 
-# ── HTML helpers ───────────────────────────────────────────────────────────────
+# ── HTML helpers ──────────────────────────────────────────────────────────[...]
 def kpi_html(meta_label, value, sub, cls):
     return f"""
     <div class="kpi-card {cls}">
@@ -359,12 +359,12 @@ def summary_html(results, fname, area):
     )
     return f'<div class="summary-card"><div class="sec-label" style="margin-bottom:.7rem">Analysis Summary</div><div class="summary-grid">{cells}</div></div>'
 
-# ── Model ──────────────────────────────────────────────────────────────────────
+# ── Model ────────────────────────────────────────────────────────────[...]
 @st.cache_resource(show_spinner=False)
 def load_analyzer():
     return get_analyzer()
 
-# ── Session state ──────────────────────────────────────────────────────────────
+# ── Session state ──────────────────────────────────────────────────────────[...]
 if "analysis_results" not in st.session_state:
     st.session_state.analysis_results = None
 if "uploaded_img" not in st.session_state:
@@ -372,7 +372,7 @@ if "uploaded_img" not in st.session_state:
 if "vid_analysis_results" not in st.session_state:
     st.session_state.vid_analysis_results = None
 
-# ── Sidebar ────────────────────────────────────────────────────────────────────
+# ── Sidebar ────────────────────────────────────────────────────────────[...]
 with st.sidebar:
     st.markdown('<div class="sb-title">Crowd Monitor</div>', unsafe_allow_html=True)
 
@@ -403,7 +403,7 @@ with st.sidebar:
         5. Download results.
         """)
 
-# ── Page header ────────────────────────────────────────────────────────────────
+# ── Page header ────────────────────────────────────────────────────────────[...]
 st.markdown("""
 <div class="app-header">
     <span class="app-title">Crowd Density Monitoring System</span>
@@ -414,7 +414,7 @@ st.markdown("""
 with st.spinner("Loading model…"):
     analyzer = load_analyzer()
 
-# ── MODE TOGGLE ────────────────────────────────────────────────────────────────
+# ── MODE TOGGLE ────────────────────────────────────────────────────────────[...]
 app_mode = st.radio(
     "Select Analysis Mode",
     ["🖼️ Image Analysis", "🎥 Video Analysis"],
@@ -423,7 +423,7 @@ app_mode = st.radio(
 )
 st.markdown("<br>", unsafe_allow_html=True)
 
-# ── IMAGE ANALYSIS ─────────────────────────────────────────────────────────────
+# ── IMAGE ANALYSIS ──────────────────────────────────────────────────────────[...]
 if app_mode == "🖼️ Image Analysis":
     left_col, right_col = st.columns([3, 7], gap="medium")
 
@@ -567,7 +567,7 @@ if app_mode == "🖼️ Image Analysis":
                 use_container_width=True,
             )
 
-# ── VIDEO ANALYSIS ─────────────────────────────────────────────────────────────
+# ── VIDEO ANALYSIS ──────────────────────────────────────────────────────────[...]
 elif app_mode == "🎥 Video Analysis":
     col1, col2 = st.columns([1, 2], gap="medium")
     
@@ -649,10 +649,12 @@ elif app_mode == "🎥 Video Analysis":
                             "Risk Level": res["risk"]
                         })
                         
-                        # Ensure annotated image is properly converted to CPU numpy array for display
+                        # Convert annotated image to numpy array if it's a tensor, then to RGB for display
                         annotated_image = res["annotated_image"]
-                        if hasattr(annotated_image, 'device'):
+                        if hasattr(annotated_image, 'cpu'):
+                            # It's a PyTorch tensor
                             annotated_image = annotated_image.cpu().numpy()
+                        # Now convert to contiguous array and RGB (handles both tensor and numpy array cases)
                         annotated_image = np.ascontiguousarray(annotated_image)
                         annotated_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
                         frame_placeholder.image(annotated_rgb, channels="RGB", caption=f"Time: {time_sec:.1f}s | People Count: {res['count']}")
