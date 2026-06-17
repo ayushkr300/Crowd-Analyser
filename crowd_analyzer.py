@@ -83,7 +83,7 @@ class CrowdAnalyzer:
         self.threshold   = threshold
 
         # Resolved at load_model() time
-        self.device: torch.device = torch.device("cpu")
+        self.device: torch.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = None
         self.transform: Optional[standard_transforms.Compose] = None
 
@@ -112,7 +112,7 @@ class CrowdAnalyzer:
 
         weight_path = Path(self.weight_path)
         if weight_path.exists():
-            checkpoint = torch.load(str(weight_path), map_location="cpu")
+            checkpoint = torch.load(str(weight_path), map_location=self.device)
             self.model.load_state_dict(checkpoint["model"])
             print(f"[CrowdAnalyzer] Weights loaded from '{weight_path}'.")
         else:
