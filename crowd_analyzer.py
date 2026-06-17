@@ -278,7 +278,12 @@ class CrowdAnalyzer:
 
         Returns a BGR ndarray ready for cv2 or Streamlit display.
         """
-        canvas = cv2.cvtColor(np.array(img_raw), cv2.COLOR_RGB2BGR)
+        # Ensure the image is converted to CPU numpy array before OpenCV operations
+        img_array = np.array(img_raw)
+        # Ensure it's a contiguous array on CPU
+        if hasattr(img_array, 'device'):
+            img_array = img_array.cpu().numpy()
+        canvas = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
         for p in points:
             x, y = int(p[0]), int(p[1])
             cv2.circle(canvas, (x, y), point_radius, point_color, -1)
