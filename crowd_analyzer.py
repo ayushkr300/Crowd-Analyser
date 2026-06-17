@@ -268,32 +268,25 @@ class CrowdAnalyzer:
 
     @staticmethod
     def _generate_annotated_image(
-        img_raw: Image.Image,
-        points: List[List[float]],
-        point_radius: int = 3,
-        point_color: Tuple[int, int, int] = (0, 0, 255),  # BGR red
-    ) -> np.ndarray:
-        """
-        Draw a filled circle at each detected head location.
-
-        Returns a BGR ndarray ready for cv2 or Streamlit display.
-        """
-        # Ensure the image is converted to CPU numpy array before OpenCV operations
+        img_raw,
+        points,
+        point_radius=3,
+        point_color=(0, 0, 255),
+    ):
         img_array = np.array(img_raw)
-        
-        # Only convert if it's actually a PyTorch tensor
-        if torch.is_tensor(img_array):
-            img_array = img_array.detach().cpu().numpy()
+    
         canvas = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
+    
         for p in points:
             x, y = int(p[0]), int(p[1])
             cv2.circle(canvas, (x, y), point_radius, point_color, -1)
+    
         return canvas
-
-    def save_image(self, image: np.ndarray, output_path: str) -> None:
-        """Write a BGR ndarray to disk, creating parent directories if needed."""
-        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
-        cv2.imwrite(output_path, image)
+    
+        def save_image(self, image: np.ndarray, output_path: str) -> None:
+            """Write a BGR ndarray to disk, creating parent directories if needed."""
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+            cv2.imwrite(output_path, image)
 
 
 # ---------------------------------------------------------------------------
