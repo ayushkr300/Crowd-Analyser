@@ -4,6 +4,7 @@ from datetime import datetime
 import os
 import tempfile
 import cv2
+import numpy as np
 
 from crowd_analyzer import get_analyzer
 
@@ -648,7 +649,12 @@ elif app_mode == "🎥 Video Analysis":
                             "Risk Level": res["risk"]
                         })
                         
-                        annotated_rgb = cv2.cvtColor(res["annotated_image"], cv2.COLOR_BGR2RGB)
+                        # Ensure annotated image is properly converted to CPU numpy array for display
+                        annotated_image = res["annotated_image"]
+                        if hasattr(annotated_image, 'device'):
+                            annotated_image = annotated_image.cpu().numpy()
+                        annotated_image = np.ascontiguousarray(annotated_image)
+                        annotated_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
                         frame_placeholder.image(annotated_rgb, channels="RGB", caption=f"Time: {time_sec:.1f}s | People Count: {res['count']}")
                         
                     finally:
