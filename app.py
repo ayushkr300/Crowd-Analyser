@@ -4,7 +4,9 @@ from datetime import datetime
 import os
 import tempfile
 import cv2
-import numpy as np
+import numpy as np    
+import traceback
+import torch
 
 from crowd_analyzer import get_analyzer
 
@@ -651,12 +653,20 @@ elif app_mode == "🎥 Video Analysis":
                         
                         # Convert annotated image to numpy array if it's a tensor, then to RGB for display
                         annotated_image = res["annotated_image"]
-                        if hasattr(annotated_image, 'cpu'):
-                            # It's a PyTorch tensor
-                            annotated_image = annotated_image.cpu().numpy()
-                        # Now convert to contiguous array and RGB (handles both tensor and numpy array cases)
+                        if torch.is_tensor(annotated_image):
+                            annotated_image = annotated_image.detach().cpu().numpy()
+                        
                         annotated_image = np.ascontiguousarray(annotated_image)
-                        annotated_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
+                        
+                        if len(annotated_image.shape) == 3:
+                            annotated_rgb = cv2.cvtColor(annotated_image, cv2.COLOR_BGR2RGB)
+                        else:
+                            annotated_rgb = annotated_image
+                        
+                        frame_placeholder.image(
+                            annotated_rgb,
+                            caption=f"Time: {time_sec:.1f}s | People Count: {res['count']}"
+                        )
                         frame_placeholder.image(annotated_rgb, channels="RGB", caption=f"Time: {time_sec:.1f}s | People Count: {res['count']}")
                         
                     finally:
@@ -665,9 +675,8 @@ elif app_mode == "🎥 Video Analysis":
                 frame_idx += 1
                 if frame_idx % 5 == 0: # Batch progress bar updates 
                     progress_bar.progress(min(frame_idx / total_frames, 1.0))
-                    
         except Exception as e:
-            st.error(f"Error during video processing: {e}")
+            st.code(traceback.format_exc())
         finally:
             cap.release()
             
