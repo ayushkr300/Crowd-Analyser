@@ -280,9 +280,6 @@ class CrowdAnalyzer:
         """
         # Ensure the image is converted to CPU numpy array before OpenCV operations
         img_array = np.array(img_raw)
-        # Ensure it's a contiguous array on CPU
-        if torch.is_tensor(img_array):
-            img_array = img_array.cpu().numpy()
         canvas = cv2.cvtColor(img_array, cv2.COLOR_RGB2BGR)
         for p in points:
             x, y = int(p[0]), int(p[1])
